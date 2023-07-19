@@ -1,17 +1,22 @@
 package kr.co.bullets.face_recognition
 
+import android.Manifest
+import android.app.Activity
 import android.content.Context
+import android.content.pm.PackageManager
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.Executors
 
-class Camera(private val context: Context) {
+class Camera(private val context: Context) : ActivityCompat.OnRequestPermissionsResultCallback {
     private val preview by lazy {
         Preview.Builder()
             .build()
@@ -34,6 +39,17 @@ class Camera(private val context: Context) {
     fun initCamera(layout: ViewGroup) {
         previewView = PreviewView(context)
         layout.addView(previewView)
+        permissionCheck(context)
+    }
+
+    private fun permissionCheck(context: Context) {
+        val permissionList = listOf(Manifest.permission.CAMERA)
+
+        if (!PermissionUtil.checkPermission(context, permissionList)) {
+            PermissionUtil.requestPermission(context as Activity, permissionList)
+        } else {
+            openPreview()
+        }
     }
 
     private fun openPreview() {
@@ -56,6 +72,28 @@ class Camera(private val context: Context) {
             )
         } catch (e: Exception) {
             e.stackTrace
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        var flag = true
+        if (grantResults.isNotEmpty()) {
+            for ((i, _) in permissions.withIndex()) {
+                if (grantResults[i] != PackageManager.PERMISSION_GRANTED) {
+                    flag = false
+                }
+            }
+
+            if (flag) {
+                openPreview()
+            } else {
+                Toast.makeText(context, "권한을 허용해야합니다.", Toast.LENGTH_SHORT).show()
+                (context as Activity).finish()
+            }
         }
     }
 }
