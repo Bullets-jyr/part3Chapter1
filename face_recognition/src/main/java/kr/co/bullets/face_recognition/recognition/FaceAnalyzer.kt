@@ -24,13 +24,40 @@ internal class FaceAnalyzer(lifecycle: Lifecycle, private val previewView: Previ
         .build()
 
     private val detector = FaceDetection.getClient(options)
+    private var detectStatus = FaceAnalyzerStatus.UnDetect
 
     private val successListener = OnSuccessListener<List<Face>> { faces ->
-
+        val face = faces.firstOrNull()
+        if (face != null) {
+            if (detectStatus == FaceAnalyzerStatus.UnDetect) {
+                detectStatus = FaceAnalyzerStatus.Detect
+                listener?.detect()
+                listener?.detectProgress(25F, "얼굴을 인식했습니다.\n왼쪽 눈만 깜빡여주세요.")
+            } else if (detectStatus == FaceAnalyzerStatus.Detect && (face.leftEyeOpenProbability ?: 0F) > EYE_SUCCESS_VALUE  && (face.rightEyeOpenProbability ?: 0F) < EYE_SUCCESS_VALUE) {
+                detectStatus = FaceAnalyzerStatus.LeftWink
+                listener?.detectProgress(50F, "오른쪽 눈만 깜빡여주세요.")
+            } else if (detectStatus == FaceAnalyzerStatus.LeftWink && (face.leftEyeOpenProbability ?: 0F) < EYE_SUCCESS_VALUE && (face.rightEyeOpenProbability ?: 0F) > EYE_SUCCESS_VALUE) {
+                detectStatus = FaceAnalyzerStatus.RightWink
+                listener?.detectProgress(75F, "활짝 웃어보세요.")
+            } else if (detectStatus == FaceAnalyzerStatus.RightWink && (face.smilingProbability ?: 0F) > SMILE_SUCCESS_VALUE) {
+                detectStatus = FaceAnalyzerStatus.Smile
+                listener?.detectProgress(100F, "얼굴 인식이 완료되었습니다.")
+                listener?.stopDetect()
+                detector.close()
+            } else if (detectStatus != FaceAnalyzerStatus.UnDetect && detectStatus != FaceAnalyzerStatus.Smile) {
+                detectStatus = FaceAnalyzerStatus.UnDetect
+                listener?.notDetect()
+                listener?.detectProgress(0F, "얼굴을 인식하지 못했습니다.\n처음으로 돌아갑니다.")
+            }
+        }
     }
 
     private val failureListener = OnFailureListener { e ->
+        detectStatus = FaceAnalyzerStatus.UnDetect
+    }
 
+    init {
+        lifecycle.addObserver(detector)
     }
 
     override fun analyze(image: ImageProxy) {
@@ -47,5 +74,10 @@ internal class FaceAnalyzer(lifecycle: Lifecycle, private val previewView: Previ
             .addOnCompleteListener {
                 imageProxy.close()
             }
+    }
+
+    companion object {
+        private const val EYE_SUCCESS_VALUE = 0.1F
+        private const val SMILE_SUCCESS_VALUE = 0.8F
     }
 }
